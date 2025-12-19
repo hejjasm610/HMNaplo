@@ -1,0 +1,270 @@
+<!doctype html>
+<html lang="hu">
+<head>
+  <meta charset="utf-8">
+  <title>HMNapló – Bevitel</title>
+
+  <style>
+    body { font-family: system-ui, Arial; margin: 18px; }
+
+    .wrap { display: grid; grid-template-columns: 1.2fr 0.8fr; gap: 16px; }
+    .card { border: 1px solid #ddd; border-radius: 10px; padding: 14px; }
+    .grid { display: grid; grid-template-columns: 140px 1fr; gap: 10px 12px; align-items: center; }
+
+    .muted { color: #666; font-size: 13px; margin-bottom: 10px; }
+
+    input, select, textarea {
+      width: 100%;
+      padding: 8px;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      box-sizing: border-box;
+    }
+
+    textarea { resize: vertical; }
+
+    /* gomb sorok */
+    .btnbar { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0 14px; }
+    .btnbar button {
+      padding: 7px 10px;
+      border: 1px solid #bbb;
+      border-radius: 8px;
+      background: #f7f7f7;
+      cursor: pointer;
+    }
+    .btnbar button.primary {
+      border-color: #2a6;
+      background: #eafff3;
+      font-weight: 700;
+    }
+    .btnbar-center {
+      justify-content: center;
+    }
+
+    .short-number {
+        max-width: 90px;
+        text-align: center;
+        font-weight: 600;
+    }
+
+
+    /* IDŐSOR – EGY SORBAN */
+    .time-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr 1fr;
+      gap: 12px;
+      margin: 10px 0 12px;
+      align-items: end;
+    }
+    .time-row > div { min-width: 0; }
+
+    .time-row label {
+      display: block;
+      font-size: 12px;
+      color: #555;
+      margin-bottom: 4px;
+    }
+
+    /* === Idő és dátum mezők: nagy számok + tartalomhoz igazodó szélesség === */
+    .time-row input[type="date"],
+    .time-row input[type="time"],
+    .time-row input[type="text"] {
+      font-size: 1rem;       /* 1.5× nagyobb számok */
+      padding: 6px 10px;
+      width: auto;             /* felülírja a globális 100%-ot */
+      line-height: 1.2;
+    }
+
+    /* Fix, kényelmes szélességek */
+    .time-row input[type="date"] { width: 170px; }  /* yyyy-mm-dd */
+    .time-row input[type="time"] { width: 110px; }  /* HH:MM */
+
+    /* Idő kijelző (readonly) */
+    #ido_display {
+      width: 90px;
+      font-weight: 700;
+      background: #fafafa;
+    }
+
+    /* táblázat */
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th, td { border-bottom: 1px solid #eee; padding: 8px 6px; text-align: left; vertical-align: top; }
+    th { font-weight: 700; }
+
+    @media (max-width: 900px) {
+      .wrap { grid-template-columns: 1fr; }
+      .time-row { grid-template-columns: 1fr 1fr; }
+      .grid { grid-template-columns: 120px 1fr; }
+    }
+  </style>
+</head>
+
+<body>
+
+  <div class="wrap">
+    <div class="card">
+      <h4>Új naplósor</h4>
+      <!-- <div class="muted">A dátum és a kezdés az előző bejegyzés végéről indul. Átírható.</div> -->
+
+      <form method="post">
+        {% csrf_token %}
+
+        {% if form.errors %}
+          <div style="border:1px solid #f99; padding:10px; border-radius:10px; margin:10px 0;">
+            <b>Hibák:</b>
+            {{ form.errors }}
+          </div>
+        {% endif %}
+
+        <!-- <div class="btnbar">
+          <button type="button" onclick="preset('alvas')">🛌 Alvás</button>
+          <button type="button" onclick="preset('olvasas')">📖 Olvasás</button>
+          <button type="button" onclick="preset('munka')">💻 Munka</button>
+          <button type="button" onclick="preset('sport')">🚴 Sport</button>
+        </div> -->
+
+        <!-- IDŐSOR – EGY SORBAN -->
+        <div class="time-row">
+          <div>
+            <label>Dátum</label>
+            {{ form.datum }}
+          </div>
+
+          <div>
+            <label>Kezd</label>
+            {{ form.kezdet }}
+          </div>
+
+          <div>
+            <label>Vég</label>
+            {{ form.veg }}
+          </div>
+
+          <div>
+            <label>Idő</label>
+            <input id="ido_display" type="text" value="" readonly>
+          </div>
+        </div>
+
+        <div class="grid">
+          <label for="id_ertek">Érték</label>
+            {{ form.ertek }}
+
+          <label for="id_kategoria">Kategória</label>
+          {{ form.kategoria }}
+          <script>
+            document.getElementById("id_kategoria").addEventListener("change", function () {
+             window.location.search = "category_id=" + encodeURIComponent(this.value);
+            });
+          </script>
+
+          <label for="id_kapcsolodo">Kapcsolódó</label>
+          {{ form.kapcsolodo }}
+
+          <label for="id_szerep">Szerep</label>
+          {{ form.szerep }}
+
+          <label for="id_erzelem">Érzelem</label>
+          {{ form.erzelem }}
+
+          <label for="id_kapcsolodo_cel">Kapcsolódó cél</label>
+          {{ form.kapcsolodo_cel }}
+
+          <label for="id_tevekenyseg">Tevékenység</label>
+          {{ form.tevekenyseg }}
+
+          <label for="id_megjegyzes">Megjegyzés</label>
+          {{ form.megjegyzes }}
+        </div>
+
+        <div class="btnbar btnbar-center">
+          <!-- <button type="button" onclick="addMinutes(10)">+10p</button>
+          <button type="button" onclick="addMinutes(20)">+20p</button>
+          <button type="button" onclick="addMinutes(30)">+30p</button>
+          <button type="button" onclick="addMinutes(60)">+60p</button> -->
+
+          {{ form.non_field_errors }}
+          <button type="submit" class="primary">Mentés</button>
+        </div>
+
+      </form>
+    </div>
+
+    <div class="card">
+      <h3>Utolsó 20 sor</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>Dátum</th><th>Kezd</th><th>Vég</th><th>Tevékenység</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for s in utolso_20 %}
+          <tr>
+            <td>{{ s.datum }}</td>
+            <td>{{ s.kezdet|time:"H:i" }}</td>
+            <td>{{ s.veg|time:"H:i" }}</td>
+            <td><a href="{% url 'naplo_bevitel_edit' s.id %}">{{ s.tevekenyseg|truncatechars:100 }}</a></td>
+            <!-- <td>{{ s.tevekenyseg|truncatechars:100 }}</td> -->
+          </tr>
+          {% empty %}
+          <tr><td colspan="4">Nincs adat.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+<script>
+  function parseTime(t) {
+    if (!t) return null;
+    const parts = t.split(":");
+    if (parts.length < 2) return null;
+    return {h: parseInt(parts[0],10), m: parseInt(parts[1],10)};
+  }
+
+  function toMinutes(tm){ return tm.h*60 + tm.m; }
+
+  function minutesToHHMM(total){
+    total = ((total % (24*60)) + (24*60)) % (24*60);
+    const h = String(Math.floor(total/60)).padStart(2,"0");
+    const m = String(total%60).padStart(2,"0");
+    return `${h}:${m}`;
+  }
+
+  function updateDuration(){
+    const start = parseTime(document.getElementById("id_kezdet").value);
+    const end = parseTime(document.getElementById("id_veg").value);
+    const out = document.getElementById("ido_display");
+
+    if (!start || !end){ out.value = ""; return; }
+
+    let diff = toMinutes(end) - toMinutes(start);
+    if (diff < 0) diff += 24*60; // éjfél átlépés
+    const h = Math.floor(diff/60);
+    const m = diff % 60;
+    out.value = `${h}:${String(m).padStart(2,"0")}`;
+  }
+
+  function addMinutes(min){
+    const endEl = document.getElementById("id_veg");
+    const end = parseTime(endEl.value);
+    if (!end) return;
+    const newMin = toMinutes(end) + min;
+    endEl.value = minutesToHHMM(newMin);
+    updateDuration();
+  }
+
+  // preset() itt csak akkor kell, ha már van ilyen JS-ed; ha nincs, hagyható üresen is
+  function preset(kind){
+    // ide később rakjuk a mezők automatikus kitöltését (kategória, szerep, stb.)
+  }
+
+  document.getElementById("id_kezdet").addEventListener("input", updateDuration);
+  document.getElementById("id_veg").addEventListener("input", updateDuration);
+  updateDuration();
+</script>
+
+</body>
+</html>
+
