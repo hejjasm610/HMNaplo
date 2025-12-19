@@ -1,6 +1,10 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, time
+
+from django.db.models import Sum
+from django.http import JsonResponse
 from django.shortcuts import render, redirect
 from django.utils import timezone
+from django.utils.dateparse import parse_date
 
 from .models import NaploSor
 from .forms import NaploSorForm
@@ -84,3 +88,88 @@ def naplo_bevitel(request, pk=None):
             "utolso_20": utolso_20,
         }
     )
+
+
+def kategoria_treemap(request):
+    return render(request, "naplo/kategoria_treemap.html")
+
+
+def api_kategoria_osszefoglalo(request):
+    """
+    GET:
+      - start=YYYY-MM-DD
+      - end=YYYY-MM-DD
+
+    Válasz:
+      {"items":[{"kategoria":"...", "minutes":123}, ...]}
+    """
+    start_s = request.GET.get("start")
+    end_s = request.GET.get("end")
+
+    start_d = parse_date(start_s) if start_s else None
+    end_d = parse_date(end_s) if end_s else None
+
+    if not start_d or not end_d:
+        return JsonResponse({"error": "Kell start és end (YYYY-MM-DD)."}, status=400)
+
+    qs = (
+        NaploSor.objects
+        .filter(datum__range=(start_d, end_d))
+        .exclude(kategoria__iexact="Alvás")
+        .values("kategoria")
+        .annotate(total_ido=Sum("ido"))
+        .order_by("-total_ido")
+    )
+
+    items = []
+    for row in qs:
+        dur = row["total_ido"]
+        minutes = int(dur.total_seconds() // 60) if dur else 0
+        items.append({
+            "kategoria": row["kategoria"] or "",
+            "minutes": minutes,
+        })
+
+    return JsonResponse({"items": items})
+
+
+def api_kategoria_bejegyzesek(request):
+    """
+    GET:
+      - start=YYYY-MM-DD
+      - end=YYYY-MM-DD
+      - kategoria=szoveg
+
+    Válasz:
+      {"entries":[{id, datum, kezdet, veg, minutes, tevekenyseg, megjegyzes}, ...]}
+    """
+    start_s = request.GET.get("start")
+    end_s = request.GET.get("end")
+    kategoria = (request.GET.get("kategoria") or "").strip()
+
+    start_d = parse_date(start_s) if start_s else None
+    end_d = parse_date(end_s) if end_s else None
+
+    if not start_d or not end_d or not kategoria:
+        return JsonResponse({"error": "Kell start, end és kategoria."}, status=400)
+
+    qs = (
+        NaploSor.objects
+        .filter(datum__range=(start_d, end_d), kategoria=kategoria)
+        .order_by("-datum", "-kezdet", "-id")   # <-- legújabb felül
+    )
+
+    entries = []
+    for s in qs:
+        minutes = int(s.ido.total_seconds() // 60) if s.ido else 0
+        entries.append({
+            "id": s.id,
+            "datum": s.datum.isoformat(),
+            "kezdet": s.kezdet.strftime("%H:%M") if s.kezdet else "",
+            "veg": s.veg.strftime("%H:%M") if s.veg else "",
+            "minutes": minutes,
+            "tevekenyseg": s.tevekenyseg,
+            "megjegyzes": s.megjegyzes or "",
+        })
+
+    return JsonResponse({"entries": entries})

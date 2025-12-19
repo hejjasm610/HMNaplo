@@ -1,0 +1,261 @@
+<!doctype html>
+<html lang="hu">
+<head>
+  <meta charset="utf-8">
+  <title>Kategória megoszlás</title>
+
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+
+  <style>
+    body { font-family: system-ui, Arial; margin: 20px; }
+
+    .controls {
+      margin-bottom: 12px;
+      display: flex;
+      gap: 12px;
+      align-items: flex-end;
+      flex-wrap: wrap;
+    }
+    .controls label { display: flex; gap: 6px; align-items: center; }
+
+    #treemap {
+      width: 100%;
+      height: 520px;
+      border: 1px solid #ddd;
+      border-radius: 12px;
+    }
+
+    svg text { pointer-events: none; fill: #fff; }
+
+    dialog::backdrop { background: rgba(0,0,0,0.35); }
+  </style>
+</head>
+<body>
+
+<div class="controls">
+  <label>Kezdet: <input type="date" id="start"></label>
+  <label>Vége: <input type="date" id="end"></label>
+  <button id="refreshBtn">Frissítés</button>
+</div>
+
+<div id="treemap"></div>
+
+<dialog id="entriesDialog" style="width:min(900px,92vw); border:none; border-radius:12px; padding:0;">
+  <div style="padding:14px 16px; border-bottom:1px solid #eee; display:flex; justify-content:space-between; align-items:center;">
+    <div>
+      <div id="dlgTitle" style="font-weight:700;"></div>
+      <div id="dlgSub" style="font-size:12px; color:#666; margin-top:2px;"></div>
+    </div>
+    <button id="dlgClose" style="border:1px solid #ddd; background:#fff; border-radius:10px; padding:6px 10px; cursor:pointer;">
+      Bezár
+    </button>
+  </div>
+
+  <div style="padding:12px 16px;">
+    <ul id="entriesList" style="list-style:none; padding:0; margin:0; display:grid; gap:8px;"></ul>
+  </div>
+</dialog>
+
+<script>
+const treemapEl = document.getElementById("treemap");
+const refreshBtn = document.getElementById("refreshBtn");
+
+const dlg = document.getElementById("entriesDialog");
+const dlgClose = document.getElementById("dlgClose");
+
+refreshBtn.addEventListener("click", loadData);
+dlgClose.addEventListener("click", () => dlg.close());
+
+dlg.addEventListener("click", (e) => {
+  const r = dlg.getBoundingClientRect();
+  const inside =
+    r.top <= e.clientY && e.clientY <= r.bottom &&
+    r.left <= e.clientX && e.clientX <= r.right;
+  if (!inside) dlg.close();
+});
+
+/* ---- percek -> "5 nap 12 óra 25 perc" ---- */
+function formatMinutes(totalMinutes) {
+  const m = Number(totalMinutes || 0);
+  const days = Math.floor(m / 1440);
+  const hours = Math.floor((m % 1440) / 60);
+  const mins = m % 60;
+
+  const parts = [];
+  if (days > 0) parts.push(`${days} nap`);
+  if (hours > 0) parts.push(`${hours} óra`);
+  if (mins > 0 || parts.length === 0) parts.push(`${mins} perc`);
+  return parts.join(" ");
+}
+
+/* ---- hash (stabil) ---- */
+function hashString(s) {
+  const str = String(s || "");
+  let h = 2166136261; // FNV-1a
+  for (let i = 0; i < str.length; i++) {
+    h ^= str.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return h >>> 0;
+}
+
+/*
+  ---- Színek: csoportos + 8 alapszín ----
+  - ha kulcsszavak alapján csoportba esik, fix baseHue környéke
+  - egyébként 8 vödörből kap baseHue-t (nem lesz minden piros)
+*/
+const BASE_HUES_8 = [20, 60, 100, 140, 180, 210, 260, 300];
+
+function baseHueFrom8Buckets(name) {
+  const idx = hashString("B:" + String(name || "")) % 8;
+  return BASE_HUES_8[idx];
+}
+
+function groupBaseHue(name) {
+  const s = String(name || "").toLowerCase();
+
+  // Mozgás
+  if (s.includes("tenisz") || s.includes("kondi") || s.includes("séta") || s.includes("bicikli") || s.includes("edzés")) return 140;
+
+  // Piszkenet / munka / pénz / ügyvezetés
+  if (s.includes("piszkenet") || s.includes("pénz") || s.includes("ugyvezet") || s.includes("ügyvezet") || s.includes("számla") || s.includes("ügyintéz")) return 210;
+
+  // Tanulás / önfejlesztés
+  if (s.includes("tanul") || s.includes("önfejleszt") || s.includes("olvas") || s.includes("hangoskönyv")) return 35;
+
+  // Kikapcsolódás / média
+  if (s.includes("youtube") || s.includes("film") || s.includes("zene") || s.includes("pihi") || s.includes("laz")) return 285;
+
+  // Étkezés / főzés
+  if (s.includes("étkez") || s.includes("kaja") || s.includes("főz") || s.includes("ebéd") || s.includes("vacs")) return 60;
+
+  // Család / kapcsolódás
+  if (s.includes("család") || s.includes("emberi") || s.includes("kapcsol") || s.includes("zsu") || s.includes("andi")) return 300;
+
+  // Egyéb: 8 alapszín valamelyike
+  return baseHueFrom8Buckets(name);
+}
+
+function colorForCategory(name) {
+  const base = groupBaseHue(name);
+
+  // apró eltérés, hogy ugyanazon csoporton belül is különbözzenek
+  const h = hashString("H:" + String(name || ""));
+  const offset = (h % 17) - 8;                 // -8..+8
+  const light = 44 + (hashString("L:" + name) % 7);  // 44..50
+  const hue = (base + offset + 360) % 360;
+
+  return `hsl(${hue}, 60%, ${light}%)`;
+}
+
+/* ---- Treemap ---- */
+async function loadData() {
+  const start = document.getElementById("start").value;
+  const end = document.getElementById("end").value;
+  if (!start || !end) return;
+
+  const res = await fetch(`/naplo/api/kategoria-osszefoglalo/?start=${start}&end=${end}`);
+  const data = await res.json();
+
+  treemapEl.innerHTML = "";
+
+  const width = treemapEl.clientWidth;
+  const height = treemapEl.clientHeight;
+
+  const root = d3.hierarchy({ children: data.items })
+    .sum(d => d.minutes);
+
+  d3.treemap().size([width, height]).padding(4)(root);
+
+  const svg = d3.select("#treemap")
+    .append("svg")
+    .attr("width", width)
+    .attr("height", height);
+
+  const node = svg.selectAll("g")
+    .data(root.leaves())
+    .enter()
+    .append("g")
+    .attr("transform", d => `translate(${d.x0},${d.y0})`)
+    .style("cursor", "pointer")
+    .on("click", (event, d) => openEntries(d.data));
+
+  node.append("rect")
+    .attr("width", d => d.x1 - d.x0)
+    .attr("height", d => d.y1 - d.y0)
+    .attr("rx", 10)
+    .attr("fill", d => colorForCategory(d.data.kategoria));
+
+  node.append("text")
+    .attr("x", 10)
+    .attr("y", 22)
+    .attr("font-size", "14px")
+    .attr("font-weight", "600")
+    .text(d => d.data.kategoria);
+
+  node.append("text")
+    .attr("x", 10)
+    .attr("y", 40)
+    .attr("font-size", "12px")
+    .text(d => formatMinutes(d.data.minutes));
+}
+
+/* ---- Modal lista ---- */
+async function openEntries(cat) {
+  const start = document.getElementById("start").value;
+  const end = document.getElementById("end").value;
+
+  document.getElementById("dlgTitle").textContent = cat.kategoria || "";
+  document.getElementById("dlgSub").textContent = `${start} – ${end} • ${formatMinutes(cat.minutes)}`;
+
+  const url =
+    `/naplo/api/kategoria-bejegyzesek/?start=${start}&end=${end}&kategoria=${encodeURIComponent(cat.kategoria || "")}`;
+
+  const res = await fetch(url);
+  const data = await res.json();
+
+  const ul = document.getElementById("entriesList");
+  ul.innerHTML = "";
+
+  const entries = data.entries || [];
+  if (!entries.length) {
+    const li = document.createElement("li");
+    li.style.padding = "10px 12px";
+    li.style.border = "1px solid #eee";
+    li.style.borderRadius = "12px";
+    li.textContent = "Nincs bejegyzés ebben a kategóriában.";
+    ul.appendChild(li);
+  }
+
+  for (const e of entries) {
+    const li = document.createElement("li");
+    li.style.border = "1px solid #eee";
+    li.style.borderRadius = "12px";
+    li.style.padding = "10px 12px";
+
+    li.innerHTML = `
+      <div style="display:flex; justify-content:space-between; gap:12px;">
+        <div style="font-weight:600;">${escapeHtml(e.tevekenyseg || "")}</div>
+        <div style="white-space:nowrap; color:#555; font-size:12px;">
+          ${escapeHtml(e.datum || "")} ${escapeHtml(e.kezdet || "")}-${escapeHtml(e.veg || "")}
+          • ${escapeHtml(formatMinutes(e.minutes))}
+        </div>
+      </div>
+      ${e.megjegyzes ? `<div style="margin-top:6px; color:#666; font-size:12px;">${escapeHtml(e.megjegyzes)}</div>` : ""}
+    `;
+
+    ul.appendChild(li);
+  }
+
+  dlg.showModal();
+}
+
+function escapeHtml(s) {
+  return (s || "").replace(/[&<>"']/g, c => ({
+    "&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"
+  }[c]));
+}
+</script>
+
+</body>
+</html>
