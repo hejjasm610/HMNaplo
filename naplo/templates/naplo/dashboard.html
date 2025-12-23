@@ -1,0 +1,224 @@
+<!doctype html>
+<html lang="hu">
+<head>
+  <meta charset="utf-8">
+  <title>HMNapló – Dashboard</title>
+
+  <style>
+    body { font-family: system-ui, Arial; margin: 18px; }
+    .card { border: 1px solid #ddd; border-radius: 12px; padding: 14px; }
+    .controls {
+      display: grid;
+      grid-template-columns: 1.4fr 170px 170px auto;
+      gap: 10px;
+      align-items: end;
+      margin-top: 10px;
+    }
+    label { display:block; font-size: 12px; color:#555; margin-bottom: 4px; }
+    input[type="text"], input[type="date"] {
+      width: 100%;
+      padding: 8px 10px;
+      border: 1px solid #ccc;
+      border-radius: 10px;
+      box-sizing: border-box;
+      font-size: 1rem;
+    }
+    button {
+      padding: 9px 12px;
+      border-radius: 10px;
+      border: 1px solid #2a6;
+      background: #eafff3;
+      font-weight: 700;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .muted { color:#666; font-size: 12px; }
+    .pill {
+      display:inline-block;
+      padding: 2px 8px;
+      border: 1px solid #eee;
+      border-radius: 999px;
+      font-size: 12px;
+      color:#444;
+      background: #fafafa;
+      font-weight: 700;
+      font-size: 13px;
+    }
+
+    .sticky-header {
+      position: sticky;
+      top: 0;
+      z-index: 60;
+      background: #fff;
+      padding-top: 10px;
+      margin-top: -10px;
+      border-bottom: 1px solid #eee;
+    }
+
+    .sticky-nav {
+      padding: 8px 0 10px;
+    }
+
+    .day-group { scroll-margin-top: 84px; }
+
+    table { width: 100%; border-collapse: collapse; font-size: 13px; table-layout: fixed; margin-top: 12px; }
+    th, td { border-bottom: 1px solid #eee; padding: 8px 6px; text-align: left; vertical-align: top; overflow-wrap: anywhere; }
+    th { font-weight: 700; }
+    tr.clickrow { cursor: pointer; }
+    tr.clickrow:hover { background: #fafafa; }
+    a { color: #0a58ca; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    @media (max-width: 900px) {
+      .controls { grid-template-columns: 1fr 1fr; }
+      button { grid-column: 1 / -1; }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="card">
+    <div style="display:flex; justify-content:space-between; gap:12px; align-items:baseline; flex-wrap:wrap;">
+      <div>
+        <div style="font-size:18px; font-weight:800;">Kérdésvezérelt Dashboard</div>
+        <div class="muted">Keresés egyszerre: tevékenység, megjegyzés, kategória, kapcsolódó, szerep, érzelem, cél, érték.</div>
+      </div>
+      <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center; justify-content:flex-end;">
+        <a class="pill" href="{% url 'naplo_bevitel' %}">Új sor bevitel</a>
+        <a class="pill" href="{% url 'kategoria_treemap' %}">Kategória treemap</a>
+
+        <form method="get" action="{% url 'nap_attekintes' %}" style="display:flex; gap:8px; align-items:center;">
+          <input type="date" name="date" value="{{ end }}" style="padding:6px 10px; border:1px solid #ddd; border-radius:999px;">
+          <button class="pill" type="submit" style="font-weight:700;">Napi összkép</button>
+        </form>
+      </div>
+    </div>
+
+    <div class="sticky-header">
+      <form method="get" style="margin-top:12px;">
+      <div class="controls">
+        <div>
+          <label>Kérdés / keresés</label>
+          <input type="text" name="q" value="{{ q|default:'' }}" placeholder="Pl.: tenisz, Viki, tudatosan gyűjtöm, 9, salsa, fáradt">
+        </div>
+        <div>
+          <label>Kezdet</label>
+          <input type="date" name="start" value="{{ start|default:'' }}">
+        </div>
+        <div>
+          <label>Vége</label>
+          <input type="date" name="end" value="{{ end|default:'' }}">
+        </div>
+        <div>
+          <button type="submit">Keresés</button>
+        </div>
+      </div>
+    </form>
+
+    {% if q %}
+      <div style="margin-top:10px; display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
+        <span class="pill">Találat: <b>{{ summary.count }}</b></span>
+        <span class="pill">Összidő: <b>{{ summary.total_human }}</b></span>
+        {% if summary.avg_ertek is not None %}
+          <span class="pill">Átlag Érték: <b>{{ summary.avg_ertek }}</b></span>
+        {% endif %}
+        <span class="muted">Max. 500 sor listázva.</span>
+      </div>
+    {% else %}
+      <div style="margin-top:10px;" class="muted">
+        Írj be egy szót vagy kifejezést, és kapsz kattintható találatokat a szerkesztéshez.
+        </div>
+      </div>
+    {% endif %}
+
+    {% if day_nav %}
+      <div class="sticky-nav">
+        <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+        <span class="muted">Ugrás:</span>
+        {% for n in day_nav %}
+          <a class="pill" href="#{{ n.anchor }}" title="{{ n.title }}" style="{{ n.style }}">{{ n.label }}</a>
+        {% endfor %}
+        </div>
+      </div>
+    {% endif %}
+
+    </div>
+
+    {% if day_groups %}
+      {% for g in day_groups %}
+        <div id="{{ g.anchor }}" class="day-group" style="margin-top:14px; border-top:1px solid #eee; padding-top:12px;">
+          <div style="display:flex; justify-content:space-between; gap:12px; align-items:baseline; flex-wrap:wrap;">
+            <div style="font-weight:800; font-size:15px;"><a href="{% url 'nap_attekintes' %}?date={{ g.date|date:'Y-m-d' }}" style="color:inherit; text-decoration:none;">{{ g.date }}</a></div>
+            <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+              <span class="pill">Találat: <b>{{ g.count }}</b></span>
+              <span class="pill">Összidő: <b>{{ g.total_human }}</b></span>
+              {% if g.avg_ertek is not None %}
+                <span class="pill">Átlag Érték: <b>{{ g.avg_ertek }}</b></span>
+              {% endif %}
+            </div>
+          </div>
+
+          <table>
+            <colgroup>
+              <col style="width:80px;">
+              <col style="width:60px;">
+              <col style="width:70px;">
+              <col style="width:280px;">
+              <col>
+            </colgroup>
+            <thead>
+              <tr>
+                <th>Idő</th>
+                <th>Perc</th>
+                <th>Érték</th>
+                <th>Kategória / Kapcsolódó / Szerep</th>
+                <th>Tevékenység</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for r in g.items %}
+                <tr class="clickrow" data-href="{{ r.edit_url }}">
+                  <td>
+                    {% if r.kezdet %}{{ r.kezdet|time:"H:i" }}{% endif %}{% if r.veg %}–{{ r.veg|time:"H:i" }}{% endif %}
+                  </td>
+                  <td>{{ r.minutes }}</td>
+                  <td>{% if r.ertek is not None %}<span class="pill">{{ r.ertek }}</span>{% endif %}</td>
+                  <td class="muted">
+                    {% if r.kategoria %}<div><b>{{ r.kategoria }}</b></div>{% endif %}
+                    <div>
+                      {% if r.kapcsolodo %}{{ r.kapcsolodo }}{% endif %}
+                      {% if r.szerep %}{% if r.kapcsolodo %} • {% endif %}{{ r.szerep }}{% endif %}
+                      {% if r.erzelem %}<span> • {{ r.erzelem }}</span>{% endif %}
+                      {% if r.kapcsolodo_cel %}<div style="margin-top:4px;"><span class="pill">{{ r.kapcsolodo_cel }}</span></div>{% endif %}
+                    </div>
+                  </td>
+                  <td>
+                    <div style="font-weight:700;">
+                      <a href="{{ r.edit_url }}">{{ r.tevekenyseg|truncatechars:140 }}</a>
+                    </div>
+                    {% if r.megjegyzes %}
+                      <div class="muted" style="margin-top:4px;">{{ r.megjegyzes|truncatechars:180 }}</div>
+                    {% endif %}
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% endfor %}
+    {% endif %}
+  </div>
+
+  <script>
+    // Teljes sor kattintható (szerkesztésre visz). Linkre kattintás marad link.
+    document.addEventListener("click", function (e) {
+      const row = e.target.closest("tr.clickrow");
+      if (!row) return;
+      if (e.target.closest("a")) return;
+      const href = row.getAttribute("data-href");
+      if (href) window.location.href = href;
+    });
+  </script>
+
+</body>
+</html>

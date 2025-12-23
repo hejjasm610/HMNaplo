@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="hu">
+<head>
+  <meta charset="utf-8">
+  <title>HMNapló – Napi összkép</title>
+  <style>
+    body { font-family: system-ui, Arial; margin: 18px; }
+    .wrap { max-width: 1200px; margin: 0 auto; }
+    .card { border: 1px solid #ddd; border-radius: 12px; padding: 14px; background: #fff; }
+    .row { display:flex; gap:12px; flex-wrap:wrap; align-items:center; justify-content:space-between; }
+    .pill { display:inline-flex; align-items:center; gap:6px; padding:6px 10px; border:1px solid #ddd; border-radius:999px; background:#fff; font-size:12px; }
+    .muted { color:#666; font-size:12px; }
+    a { color:#0b66c3; }
+    .grid { display:grid; grid-template-columns: 1.3fr 0.7fr; gap: 14px; margin-top: 14px; }
+    @media (max-width: 980px){ .grid { grid-template-columns: 1fr; } }
+
+    table { width: 100%; border-collapse: collapse; font-size: 13px; table-layout: fixed; }
+    th, td { border-bottom: 1px solid #eee; padding: 8px 6px; text-align: left; vertical-align: top; overflow-wrap: anywhere; }
+    th { font-weight: 800; }
+    tr.clickrow { cursor:pointer; }
+    tr.clickrow:hover { background:#fafafa; }
+
+    .col-time { width: 88px; }
+    .col-min { width: 70px; }
+    .col-ertek { width: 64px; }
+    .badge { display:inline-flex; align-items:center; justify-content:center; width:26px; height:26px; border-radius:999px; border:1px solid #ddd; font-weight:800; background:#fff; }
+    .meta { color:#666; font-size:12px; margin-top:2px; }
+    input[type="date"] { padding:6px 10px; border:1px solid #ddd; border-radius:999px; }
+    button { cursor:pointer; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <div class="row">
+        <div>
+          <div style="font-weight:900; font-size:18px;">Napi összkép</div>
+          <div class="muted">Válasz a kérdésre: „hogyan telt a napom?”</div>
+        </div>
+        <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center; justify-content:flex-end;">
+          <a class="pill" href="{% url 'dashboard' %}">Dashboard</a>
+          <a class="pill" href="{% url 'naplo_bevitel' %}">Új sor bevitel</a>
+          <a class="pill" href="{% url 'kategoria_treemap' %}">Kategória treemap</a>
+
+          <form method="get" action="{% url 'nap_attekintes' %}" style="display:flex; gap:8px; align-items:center;">
+            <input type="date" name="date" value="{{ date_iso }}">
+            <button class="pill" type="submit" style="font-weight:800;">Mutasd ezt a napot</button>
+          </form>
+        </div>
+      </div>
+
+      <div style="margin-top:10px; display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+        <span class="pill">Dátum: <b>{{ date|date:"Y. m. d. (D)" }}</b></span>
+        <span class="pill">Összidő: <b>{{ total_human }}</b></span>
+        <span class="pill">Sorok: <b>{{ entries|length }}</b></span>
+        {% if avg_ertek is not None %}<span class="pill">Átlag Érték: <b>{{ avg_ertek }}</b></span>{% endif %}
+        {% if min_ertek is not None %}<span class="pill">Min: <b>{{ min_ertek }}</b></span>{% endif %}
+        {% if max_ertek is not None %}<span class="pill">Max: <b>{{ max_ertek }}</b></span>{% endif %}
+      </div>
+    </div>
+
+    <div class="grid">
+      <div class="card">
+        <div style="font-weight:900; margin-bottom:8px;">Idővonal</div>
+        {% if entries %}
+        <table>
+          <colgroup>
+            <col class="col-time">
+            <col class="col-min">
+            <col class="col-ertek">
+            <col>
+            <col>
+          </colgroup>
+          <thead>
+            <tr>
+              <th>Idő</th>
+              <th>Perc</th>
+              <th>Érték</th>
+              <th>Meta</th>
+              <th>Tevékenység</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for e in entries %}
+              <tr class="clickrow" onclick="window.location.href='{{ e.edit_url }}'">
+                <td>
+                  {{ e.kezdet|time:"H:i" }}–{{ e.veg|time:"H:i" }}
+                </td>
+                <td><b>{{ e.minutes }}</b></td>
+                <td>
+                  {% if e.ertek is not None %}<span class="badge">{{ e.ertek }}</span>{% endif %}
+                </td>
+                <td>
+                  <div><b>{{ e.kategoria }}</b></div>
+                  <div class="meta">
+                    {% if e.kapcsolodo %}{{ e.kapcsolodo }}{% endif %}
+                    {% if e.szerep %}{% if e.kapcsolodo %} • {% endif %}{{ e.szerep }}{% endif %}
+                    {% if e.erzelem %}{% if e.kapcsolodo or e.szerep %} • {% endif %}{{ e.erzelem }}{% endif %}
+                  </div>
+                  {% if e.kapcsolodo_cel %}
+                    <div class="pill" style="margin-top:6px; max-width: 520px;">{{ e.kapcsolodo_cel }}</div>
+                  {% endif %}
+                </td>
+                <td>
+                  <div style="font-weight:800;">{{ e.tevekenyseg|truncatechars:120 }}</div>
+                  {% if e.megjegyzes %}
+                    <div class="meta">{{ e.megjegyzes|truncatechars:160 }}</div>
+                  {% endif %}
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        <div class="muted" style="margin-top:8px;">Kattints egy sorra a szerkesztéshez.</div>
+        {% else %}
+          <div class="muted">Nincs bejegyzés ezen a napon.</div>
+        {% endif %}
+      </div>
+
+      <div class="card">
+        <div style="font-weight:900; margin-bottom:8px;">Összefoglalók</div>
+
+        <div style="font-weight:800; margin-top:6px;">Top kategóriák</div>
+        {% if top_kategoriak %}
+          <div style="display:grid; gap:6px; margin-top:6px;">
+            {% for k in top_kategoriak %}
+              <div class="pill" style="justify-content:space-between;">
+                <span>{{ k.kategoria|default:"(üres)" }}</span>
+                <b>{{ k.human }}</b>
+              </div>
+            {% endfor %}
+          </div>
+        {% else %}
+          <div class="muted">Nincs kategória adat.</div>
+        {% endif %}
+
+        <div style="font-weight:800; margin-top:14px;">Top célok</div>
+        {% if top_celok %}
+          <div style="display:grid; gap:6px; margin-top:6px;">
+            {% for c in top_celok %}
+              <div class="pill" style="justify-content:space-between;">
+                <span>{{ c.cel }}</span>
+                <b>{{ c.human }}</b>
+              </div>
+            {% endfor %}
+          </div>
+        {% else %}
+          <div class="muted">Nincs cél ezen a napon.</div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</body>
+</html>
