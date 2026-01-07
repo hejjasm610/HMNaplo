@@ -2,9 +2,6 @@ from django.urls import path
 from .views import (
     naplo_bevitel,
     kategoria_treemap,
-    eletkerek,
-    api_eletkerek_osszefoglalo,
-    api_eletkerek_bejegyzesek,
     api_kategoria_osszefoglalo,
     api_kategoria_bejegyzesek,
     api_utolso_bejegyzesek_kategoriara,
@@ -17,16 +14,12 @@ urlpatterns = [
     path("bevitel/<int:pk>/", naplo_bevitel, name="naplo_bevitel_edit"),
 
     path("kategoria-treemap/", kategoria_treemap, name="kategoria_treemap"),
-    path("eletkerek/", eletkerek, name="eletkerek"),
 
     path("dashboard/", dashboard_kereses, name="dashboard"),
     path("nap/", nap_attekintes, name="nap_attekintes"),
 
     path("api/kategoria-osszefoglalo/", api_kategoria_osszefoglalo, name="api_kategoria_osszefoglalo"),
     path("api/kategoria-bejegyzesek/", api_kategoria_bejegyzesek, name="api_kategoria_bejegyzesek"),
-
-    path("api/eletkerek-osszefoglalo/", api_eletkerek_osszefoglalo, name="api_eletkerek_osszefoglalo"),
-    path("api/eletkerek-bejegyzesek/", api_eletkerek_bejegyzesek, name="api_eletkerek_bejegyzesek"),
 
     # új: kategória kiválasztás után modalhoz
     path(

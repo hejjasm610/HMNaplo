@@ -1,34 +1,16 @@
-from tinymce.widgets import TinyMCE
 from django import forms
 from datetime import datetime, timedelta
 from .models import NaploSor, Param
 
-# Életkerék – 8 terület (UI)
-ELETKEREK_CHOICES = [
-    ("EMBEREK", "Emberek"),
-    ("ONISMERET", "Önismeret"),
-    ("MUNKA", "Munka"),
-    ("HOBBI", "Hobbi"),
-    ("SPIRIT", "Spirit"),
-    ("PENZUGY", "Pénzügy"),
-    ("TANULAS", "Tanulás"),
-    ("EGESZSEG", "Egészség"),
-]
-
 
 class NaploSorForm(forms.ModelForm):
     ertek = forms.IntegerField(required=False, initial=6)
-    eletkerek_focus = forms.MultipleChoiceField(
-        required=False,
-        choices=ELETKEREK_CHOICES,
-        widget=forms.CheckboxSelectMultiple,
-    )
     class Meta:
         model = NaploSor
         fields = [
             "datum", "kezdet", "veg",
             "tevekenyseg", "ertek",
-            "kategoria", "eletkerek_focus", "kapcsolodo", "szerep", "erzelem",
+            "kategoria", "kapcsolodo", "szerep", "erzelem",
             "kapcsolodo_cel", "megjegyzes",
         ]
         widgets = {
@@ -81,3 +63,4 @@ class NaploSorForm(forms.ModelForm):
 
 
     
+

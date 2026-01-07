@@ -1,0 +1,342 @@
+{% load static %}
+<!doctype html>
+<html lang="hu">
+<head>
+  <meta charset="utf-8">
+  <title>Életkerék</title>
+  <style>
+    body { font-family: system-ui, Arial; margin: 20px; }
+
+    .topbar { display:flex; justify-content:space-between; gap:12px; align-items:baseline; flex-wrap:wrap; }
+    .pill { display:inline-block; padding:6px 10px; border:1px solid #ddd; border-radius:999px; background:#fff; font-weight:700; text-decoration:none; color:#111; }
+
+    .controls {
+      margin-top: 12px;
+      display: flex;
+      gap: 12px;
+      align-items: flex-end;
+      flex-wrap: wrap;
+    }
+    .controls label { display: flex; gap: 6px; align-items: center; }
+
+    .grid {
+      margin-top: 14px;
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+    }
+    .tile {
+      border: 1px solid #ddd;
+      border-radius: 14px;
+      padding: 12px 12px;
+      background: #fff;
+      cursor: pointer;
+      transition: transform .05s ease;
+    }
+    .tile:hover { transform: translateY(-1px); }
+
+    .tile .title { font-weight: 800; font-size: 14px; }
+    .tile .meta { margin-top: 6px; display:flex; justify-content:space-between; gap:10px; font-variant-numeric: tabular-nums; }
+    .muted { color: #666; font-size: 12px; }
+
+    .barwrap { margin-top: 10px; height: 10px; background:#f3f4f6; border:1px solid #e5e7eb; border-radius: 999px; overflow: hidden; }
+    .bar { height: 100%; background:#d1d5db; width: 0%; }
+
+    @media (max-width: 900px) {
+      .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+
+    dialog::backdrop { background: rgba(0,0,0,0.35); }
+  </style>
+</head>
+<body>
+
+  <div class="topbar">
+    <div>
+      <div style="font-size:18px; font-weight:800;">Életkerék</div>
+      <div class="muted">Kattints egy területre, és látod a bejegyzéseket időrendben.</div>
+    </div>
+    <div style="display:flex; gap:14px; flex-wrap:wrap; align-items:center; justify-content:center;">
+      <a class="pill" href="{% url 'dashboard' %}">Dashboard</a>
+      <a class="pill" href="{% url 'kategoria_treemap' %}">Kategória treemap</a>
+      <a class="pill" href="{% url 'naplo_bevitel' %}">Új sor bevitel</a>
+    </div>
+  </div>
+
+  <div class="controls">
+    <label>Kezdet: <input type="date" id="start"></label>
+    <label>Vége: <input type="date" id="end"></label>
+    <button id="refreshBtn" class="pill" type="button">Frissítés</button>
+    <span id="sumLine" class="muted"></span>
+  </div>
+
+  <div id="tiles" class="grid"></div>
+
+  <!-- ÉLETKERÉK TORTA -->
+  <div id="wheelContainer" style="margin-top:14px; padding:12px; border:1px solid #eee; border-radius:14px; background:#fff;">
+    <div style="font-weight:800; margin-bottom:4px;">Életkerék megoszlás (torta)</div>
+    <div style="font-size:12px; color:#666; margin-bottom:10px;">
+      A szeletek szöge arányos az időráfordítással. Frissítés után azonnal újrarajzolódik.
+    </div>
+    <div style="display:flex; gap:14px; align-items:flex-start; flex-wrap:wrap; justify-content:center;">
+      <svg id="wheelSvg" viewBox="0 0 420 320" width="400" height="250"
+           style="max-width:100%; height:auto; display:block; background:#fafafa; border-radius:10px;"></svg>
+      <div id="wheelLegend" style="min-width:240px;"></div>
+    </div>
+  </div>
+
+<dialog id="entriesDialog" style="width:min(900px,92vw); border:none; border-radius:12px; padding:0;">
+    <div style="padding:14px 16px; border-bottom:1px solid #eee; display:flex; justify-content:space-between; align-items:center;">
+      <div>
+        <div id="dlgTitle" style="font-weight:800;"></div>
+        <div id="dlgSub" style="font-size:12px; color:#666; margin-top:2px;"></div>
+      </div>
+      <button id="dlgClose" class="pill" type="button" style="background:#fff; cursor:pointer;">Bezár</button>
+    </div>
+
+    <div style="padding:12px 16px;">
+      <ul id="entriesList" style="list-style:none; padding:0; margin:0; display:grid; gap:8px;"></ul>
+    </div>
+  </dialog>
+
+<script>
+const tilesEl = document.getElementById("tiles");
+const refreshBtn = document.getElementById("refreshBtn");
+const sumLine = document.getElementById("sumLine");
+
+const dlg = document.getElementById("entriesDialog");
+const dlgClose = document.getElementById("dlgClose");
+
+refreshBtn.addEventListener("click", loadData);
+dlgClose.addEventListener("click", () => dlg.close());
+
+// kattintás a dialogon kívül: zár
+DlgOutsideClose();
+function DlgOutsideClose() {
+  dlg.addEventListener("click", (e) => {
+    const r = dlg.getBoundingClientRect();
+    const inside =
+      r.top <= e.clientY && e.clientY <= r.bottom &&
+      r.left <= e.clientX && e.clientX <= r.right;
+    if (!inside) dlg.close();
+  });
+}
+
+function escapeHtml(s) {
+  return String(s || "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+/* ---- percek -> "5 nap 12 óra 25 perc" ---- */
+function formatMinutes(totalMinutes) {
+  const m = Number(totalMinutes || 0);
+  const days = Math.floor(m / 1440);
+  const hours = Math.floor((m % 1440) / 60);
+  const mins = m % 60;
+
+  const parts = [];
+  if (days > 0) parts.push(`${days} nap`);
+  if (hours > 0) parts.push(`${hours} óra`);
+  if (mins > 0 || parts.length === 0) parts.push(`${mins} perc`);
+  return parts.join(" ");
+}
+
+function todayIso() {
+  const d = new Date();
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+function isoDaysAgo(n) {
+  const d = new Date();
+  d.setDate(d.getDate() - n);
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+async function loadData() {
+  const start = document.getElementById("start").value;
+  const end = document.getElementById("end").value;
+  if (!start || !end) return;
+
+  const res = await fetch(`/naplo/api/eletkerek-osszefoglalo/?start=${start}&end=${end}`);
+  const data = await res.json();
+
+  const items = data.items || [];
+  const total = Number(data.total_minutes || 0);
+
+  sumLine.textContent = `Összidő: ${formatMinutes(total)} • ${start} – ${end}`;
+
+  tilesEl.innerHTML = "";
+
+  for (const it of items) {
+    const div = document.createElement("div");
+    div.className = "tile";
+    div.dataset.code = it.code;
+    div.dataset.label = it.label;
+
+    div.innerHTML = `
+      <div class="title">${escapeHtml(it.label)}</div>
+      <div class="meta">
+        <div><b>${escapeHtml(formatMinutes(it.minutes))}</b></div>
+        <div class="muted">${escapeHtml(String(it.pct))}%</div>
+      </div>
+      <div class="barwrap" title="${escapeHtml(String(it.minutes))} perc (${escapeHtml(String(it.pct))}%)">
+        <div class="bar" style="width: ${escapeHtml(String(it.pct))}%;"></div>
+      </div>
+    `;
+
+    div.addEventListener("click", () => openEntries(it, start, end));
+    tilesEl.appendChild(div);
+  }
+}
+
+async function openEntries(it, start, end) {
+  document.getElementById("dlgTitle").textContent = it.label || "";
+  document.getElementById("dlgSub").textContent = `${start} – ${end} • ${formatMinutes(it.minutes)} • ${it.pct}%`;
+
+  const url = `/naplo/api/eletkerek-bejegyzesek/?start=${start}&end=${end}&terulet=${encodeURIComponent(it.code || "")}`;
+  const res = await fetch(url);
+  const data = await res.json();
+
+  const ul = document.getElementById("entriesList");
+  ul.innerHTML = "";
+
+  const entries = data.entries || [];
+  if (!entries.length) {
+    const li = document.createElement("li");
+    li.style.padding = "10px 12px";
+    li.style.border = "1px solid #eee";
+    li.style.borderRadius = "12px";
+    li.textContent = "Nincs bejegyzés ebben a területben.";
+    ul.appendChild(li);
+  }
+
+  for (const e of entries) {
+    const li = document.createElement("li");
+    li.style.border = "1px solid #eee";
+    li.style.borderRadius = "12px";
+    li.style.padding = "10px 12px";
+
+    li.innerHTML = `
+      <div style="display:flex; justify-content:space-between; gap:12px; align-items:flex-start;">
+        <div style="font-weight:700;">${escapeHtml(e.tevekenyseg || "")}</div>
+        <div style="white-space:nowrap; color:#555; font-size:12px; font-variant-numeric: tabular-nums;">
+          ${escapeHtml(e.datum || "")} ${escapeHtml(e.kezdet || "")}-${escapeHtml(e.veg || "")}
+        </div>
+      </div>
+      <div class="muted" style="margin-top:6px;">${escapeHtml(e.minutes_human || "")}</div>
+      ${e.megjegyzes ? `<div style="margin-top:6px; font-size:12px; color:#444;">${escapeHtml(e.megjegyzes)}</div>` : ""}
+      <div style="margin-top:8px;">
+        <a class="pill" href="${escapeHtml(e.edit_url)}" style="font-size:12px;">Szerkesztés</a>
+      </div>
+    `;
+
+    ul.appendChild(li);
+  }
+
+  dlg.showModal();
+}
+
+// alap dátumok: utolsó 14 nap
+document.getElementById("end").value = todayIso();
+document.getElementById("start").value = isoDaysAgo(13);
+loadData();
+</script>
+
+<script>
+(function () {
+  "use strict";
+  function $(sel, root){ return (root||document).querySelector(sel); }
+  function $all(sel, root){ return Array.from((root||document).querySelectorAll(sel)); }
+  const COLORS = ["#4E79A7","#F28E2B","#E15759","#76B7B2","#59A14F","#EDC948","#B07AA1","#FF9DA7"];
+  function clear(node){ while(node && node.firstChild) node.removeChild(node.firstChild); }
+  function safeNum(x){ const n=Number(x); return Number.isFinite(n)?n:0; }
+  function polar(cx,cy,r,deg){ const rad=(deg-90)*Math.PI/180; return {x:cx+r*Math.cos(rad), y:cy+r*Math.sin(rad)}; }
+  function arcPath(cx,cy,r,a0,a1){
+    const p0=polar(cx,cy,r,a1), p1=polar(cx,cy,r,a0);
+    const large=(a1-a0)>180 ? 1 : 0;
+    return `M ${cx} ${cy} L ${p0.x} ${p0.y} A ${r} ${r} 0 ${large} 0 ${p1.x} ${p1.y} Z`;
+  }
+  function parseTile(tile){
+    const label = tile.dataset.label || (tile.querySelector(".title")?.textContent || "").trim();
+    const title = tile.querySelector(".barwrap")?.getAttribute("title") || "";
+    const mMin = title.match(/(\d+)\s*perc/i);
+    const minutes = mMin ? safeNum(mMin[1]) : 0;
+    return { label, minutes };
+  }
+  function render(){
+    const svg=$("#wheelSvg");
+    const legend=$("#wheelLegend");
+    if(!svg) return;
+    const tiles=$all("#tiles .tile");
+    const items=tiles.map(parseTile);
+    const total=items.reduce((s,it)=>s+it.minutes,0);
+    if(total<=0){ clear(svg); if(legend) legend.innerHTML=""; return; }
+
+    const NS="http://www.w3.org/2000/svg";
+    clear(svg);
+    if(legend) legend.innerHTML="";
+    svg.setAttribute("viewBox","0 0 420 320");
+
+    const cx=210, cy=160, r=120;
+    let ang=0;
+    items.filter(it=>it.minutes>0).forEach((it,i)=>{
+      const slice=it.minutes/total*360;
+      const a0=ang, a1=ang+slice;
+      ang=a1;
+
+      const path=document.createElementNS(NS,"path");
+      path.setAttribute("d", arcPath(cx,cy,r,a0,a1));
+      path.setAttribute("fill", COLORS[i%COLORS.length]);
+      path.setAttribute("stroke", "#fff");
+      path.setAttribute("stroke-width","2");
+      path.style.cursor="pointer";
+      svg.appendChild(path);
+
+      const pct=it.minutes/total*100;
+      const title=document.createElementNS(NS,"title");
+      title.textContent = `${it.label}: ${pct.toFixed(1)}% (${it.minutes} perc)`;
+      path.appendChild(title);
+
+      // kattintás: ugyanaz, mint a kártya
+      path.addEventListener("click", ()=>{
+        const target=$all("#tiles .tile").find(t => (t.dataset.label||"")===it.label);
+        if(target) target.click();
+      });
+
+      if(legend){
+        const row=document.createElement("div");
+        row.style.display="flex"; row.style.alignItems="center"; row.style.gap="8px"; row.style.padding="4px 0";
+        const sw=document.createElement("span");
+        sw.style.width="10px"; sw.style.height="10px"; sw.style.borderRadius="3px";
+        sw.style.background = COLORS[i%COLORS.length]; sw.style.display="inline-block";
+        const txt=document.createElement("span");
+        txt.style.fontSize="12px"; txt.style.color="#444";
+        txt.textContent = `${it.label} — ${pct.toFixed(1)}% (${it.minutes} perc)`;
+        row.appendChild(sw); row.appendChild(txt);
+        legend.appendChild(row);
+      }
+    });
+  }
+  function schedule(){ setTimeout(render,60); setTimeout(render,250); setTimeout(render,900); }
+  document.addEventListener("DOMContentLoaded", ()=>{
+    const tiles=$("#tiles");
+    if(tiles) new MutationObserver(()=>schedule()).observe(tiles,{childList:true,subtree:true});
+    const refresh=$("#refreshBtn");
+    if(refresh) refresh.addEventListener("click", ()=>schedule());
+    schedule();
+  });
+})();
+</script>
+
+</body>
+</html>

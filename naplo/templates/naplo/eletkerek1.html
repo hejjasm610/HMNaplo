@@ -1,0 +1,246 @@
+{% load static %}
+<!doctype html>
+<html lang="hu">
+<head>
+  <meta charset="utf-8">
+  <title>Életkerék</title>
+  <style>
+    body { font-family: system-ui, Arial; margin: 20px; }
+
+    .topbar { display:flex; justify-content:space-between; gap:12px; align-items:baseline; flex-wrap:wrap; }
+    .pill { display:inline-block; padding:6px 10px; border:1px solid #ddd; border-radius:999px; background:#fff; font-weight:700; text-decoration:none; color:#111; }
+
+    .controls {
+      margin-top: 12px;
+      display: flex;
+      gap: 12px;
+      align-items: flex-end;
+      flex-wrap: wrap;
+    }
+    .controls label { display: flex; gap: 6px; align-items: center; }
+
+    .grid {
+      margin-top: 14px;
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+    }
+    .tile {
+      border: 1px solid #ddd;
+      border-radius: 14px;
+      padding: 12px 12px;
+      background: #fff;
+      cursor: pointer;
+      transition: transform .05s ease;
+    }
+    .tile:hover { transform: translateY(-1px); }
+
+    .tile .title { font-weight: 800; font-size: 14px; }
+    .tile .meta { margin-top: 6px; display:flex; justify-content:space-between; gap:10px; font-variant-numeric: tabular-nums; }
+    .muted { color: #666; font-size: 12px; }
+
+    .barwrap { margin-top: 10px; height: 10px; background:#f3f4f6; border:1px solid #e5e7eb; border-radius: 999px; overflow: hidden; }
+    .bar { height: 100%; background:#d1d5db; width: 0%; }
+
+    @media (max-width: 900px) {
+      .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+
+    dialog::backdrop { background: rgba(0,0,0,0.35); }
+  </style>
+</head>
+<body>
+
+  <div class="topbar">
+    <div>
+      <div style="font-size:18px; font-weight:800;">Életkerék</div>
+      <div class="muted">Kattints egy területre, és látod a bejegyzéseket időrendben.</div>
+    </div>
+    <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center; justify-content:flex-end;">
+      <a class="pill" href="{% url 'dashboard' %}">Dashboard</a>
+      <a class="pill" href="{% url 'kategoria_treemap' %}">Kategória treemap</a>
+      <a class="pill" href="{% url 'naplo_bevitel' %}">Új sor bevitel</a>
+    </div>
+  </div>
+
+  <div class="controls">
+    <label>Kezdet: <input type="date" id="start"></label>
+    <label>Vége: <input type="date" id="end"></label>
+    <button id="refreshBtn" class="pill" type="button">Frissítés</button>
+    <span id="sumLine" class="muted"></span>
+  </div>
+
+  <div id="tiles" class="grid"></div>
+  {% include "naplo/_eletkerek_wheel_block.html" %}
+
+  <dialog id="entriesDialog" style="width:min(900px,92vw); border:none; border-radius:12px; padding:0;">
+    <div style="padding:14px 16px; border-bottom:1px solid #eee; display:flex; justify-content:space-between; align-items:center;">
+      <div>
+        <div id="dlgTitle" style="font-weight:800;"></div>
+        <div id="dlgSub" style="font-size:12px; color:#666; margin-top:2px;"></div>
+      </div>
+      <button id="dlgClose" class="pill" type="button" style="background:#fff; cursor:pointer;">Bezár</button>
+    </div>
+
+    <div style="padding:12px 16px;">
+      <ul id="entriesList" style="list-style:none; padding:0; margin:0; display:grid; gap:8px;"></ul>
+    </div>
+  </dialog>
+
+<script>
+const tilesEl = document.getElementById("tiles");
+const refreshBtn = document.getElementById("refreshBtn");
+const sumLine = document.getElementById("sumLine");
+
+const dlg = document.getElementById("entriesDialog");
+const dlgClose = document.getElementById("dlgClose");
+
+refreshBtn.addEventListener("click", loadData);
+dlgClose.addEventListener("click", () => dlg.close());
+
+// kattintás a dialogon kívül: zár
+DlgOutsideClose();
+function DlgOutsideClose() {
+  dlg.addEventListener("click", (e) => {
+    const r = dlg.getBoundingClientRect();
+    const inside =
+      r.top <= e.clientY && e.clientY <= r.bottom &&
+      r.left <= e.clientX && e.clientX <= r.right;
+    if (!inside) dlg.close();
+  });
+}
+
+function escapeHtml(s) {
+  return String(s || "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+/* ---- percek -> "5 nap 12 óra 25 perc" ---- */
+function formatMinutes(totalMinutes) {
+  const m = Number(totalMinutes || 0);
+  const days = Math.floor(m / 1440);
+  const hours = Math.floor((m % 1440) / 60);
+  const mins = m % 60;
+
+  const parts = [];
+  if (days > 0) parts.push(`${days} nap`);
+  if (hours > 0) parts.push(`${hours} óra`);
+  if (mins > 0 || parts.length === 0) parts.push(`${mins} perc`);
+  return parts.join(" ");
+}
+
+function todayIso() {
+  const d = new Date();
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+function isoDaysAgo(n) {
+  const d = new Date();
+  d.setDate(d.getDate() - n);
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+async function loadData() {
+  const start = document.getElementById("start").value;
+  const end = document.getElementById("end").value;
+  if (!start || !end) return;
+
+  const res = await fetch(`/naplo/api/eletkerek-osszefoglalo/?start=${start}&end=${end}`);
+  const data = await res.json();
+
+  const items = data.items || [];
+  const total = Number(data.total_minutes || 0);
+
+  sumLine.textContent = `Összidő: ${formatMinutes(total)} • ${start} – ${end}`;
+
+  tilesEl.innerHTML = "";
+
+  for (const it of items) {
+    const div = document.createElement("div");
+    div.className = "tile";
+    div.dataset.code = it.code;
+    div.dataset.label = it.label;
+
+    div.innerHTML = `
+      <div class="title">${escapeHtml(it.label)}</div>
+      <div class="meta">
+        <div><b>${escapeHtml(formatMinutes(it.minutes))}</b></div>
+        <div class="muted">${escapeHtml(String(it.pct))}%</div>
+      </div>
+      <div class="barwrap" title="${escapeHtml(String(it.minutes))} perc (${escapeHtml(String(it.pct))}%)">
+        <div class="bar" style="width: ${escapeHtml(String(it.pct))}%;"></div>
+      </div>
+    `;
+
+    div.addEventListener("click", () => openEntries(it, start, end));
+    tilesEl.appendChild(div);
+  }
+}
+
+async function openEntries(it, start, end) {
+  document.getElementById("dlgTitle").textContent = it.label || "";
+  document.getElementById("dlgSub").textContent = `${start} – ${end} • ${formatMinutes(it.minutes)} • ${it.pct}%`;
+
+  const url = `/naplo/api/eletkerek-bejegyzesek/?start=${start}&end=${end}&terulet=${encodeURIComponent(it.code || "")}`;
+  const res = await fetch(url);
+  const data = await res.json();
+
+  const ul = document.getElementById("entriesList");
+  ul.innerHTML = "";
+
+  const entries = data.entries || [];
+  if (!entries.length) {
+    const li = document.createElement("li");
+    li.style.padding = "10px 12px";
+    li.style.border = "1px solid #eee";
+    li.style.borderRadius = "12px";
+    li.textContent = "Nincs bejegyzés ebben a területben.";
+    ul.appendChild(li);
+  }
+
+  for (const e of entries) {
+    const li = document.createElement("li");
+    li.style.border = "1px solid #eee";
+    li.style.borderRadius = "12px";
+    li.style.padding = "10px 12px";
+
+    li.innerHTML = `
+      <div style="display:flex; justify-content:space-between; gap:12px; align-items:flex-start;">
+        <div style="font-weight:700;">${escapeHtml(e.tevekenyseg || "")}</div>
+        <div style="white-space:nowrap; color:#555; font-size:12px; font-variant-numeric: tabular-nums;">
+          ${escapeHtml(e.datum || "")} ${escapeHtml(e.kezdet || "")}-${escapeHtml(e.veg || "")}
+        </div>
+      </div>
+      <div class="muted" style="margin-top:6px;">${escapeHtml(e.minutes_human || "")}</div>
+      ${e.megjegyzes ? `<div style="margin-top:6px; font-size:12px; color:#444;">${escapeHtml(e.megjegyzes)}</div>` : ""}
+      <div style="margin-top:8px;">
+        <a class="pill" href="${escapeHtml(e.edit_url)}" style="font-size:12px;">Szerkesztés</a>
+      </div>
+    `;
+
+    ul.appendChild(li);
+  }
+
+  dlg.showModal();
+}
+
+// alap dátumok: utolsó 14 nap
+document.getElementById("end").value = todayIso();
+document.getElementById("start").value = isoDaysAgo(13);
+loadData();
+</script>
+
+<script src="{% static 'naplo/eletkerek_wheel.js' %}"></script>
+
+</body>
+</html>

@@ -75,7 +75,13 @@
     }
   
 
-    
+    /* 6P heti térkép */
+    .sixp-card { margin-top: 12px; }
+    .sixp-row { display:flex; align-items:center; gap:10px; margin:8px 0; }
+    .sixp-code { width: 34px; text-align:right; font-weight:800; }
+    .sixp-barwrap { flex:1; height: 10px; background:#f3f4f6; border:1px solid #e5e7eb; border-radius:999px; overflow:hidden; }
+    .sixp-bar { height:100%; background:#d1d5db; }
+    .sixp-meta { width: 110px; text-align:right; font-variant-numeric: tabular-nums; }
 </style>
 </head>
 <body>
@@ -89,7 +95,6 @@
       <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center; justify-content:flex-end;">
         <a class="pill" href="{% url 'naplo_bevitel' %}">Új sor bevitel</a>
         <a class="pill" href="{% url 'kategoria_treemap' %}">Kategória treemap</a>
-        <a class="pill" href="{% url 'eletkerek' %}">Életkerék</a>
 
         <form method="get" action="{% url 'nap_attekintes' %}" style="display:flex; gap:8px; align-items:center;">
           <input type="date" name="date" value="{{ end }}" style="padding:6px 10px; border:1px solid #ddd; border-radius:999px;">
@@ -118,6 +123,25 @@
         </div>
       </div>
     </form>
+
+
+    <div class="card sixp-card">
+      <div style="display:flex; justify-content:space-between; gap:10px; flex-wrap:wrap; align-items:baseline;">
+        <div style="font-weight:800;">6P heti térkép</div>
+        <div class="muted">{{ week_start|date:"Y.m.d" }} – {{ week_end|date:"Y.m.d" }} · Összidő: {{ week_total_minutes }} perc</div>
+      </div>
+
+      {% for p in weekly_6p %}
+        <div class="sixp-row">
+          <div class="sixp-code">{{ p.label }}</div>
+          <div class="sixp-barwrap" title="{{ p.minutes }} perc ({{ p.pct }}%)">
+            <div class="sixp-bar" style="width: {{ p.pct }}%;"></div>
+          </div>
+          <div class="sixp-meta">{{ p.minutes }}p · {{ p.pct }}%</div>
+        </div>
+      {% endfor %}
+      <div class="muted" style="margin-top:8px;">A több jelölésű sorok ideje egyenlően oszlik meg a jelölések között.</div>
+    </div>
 
     {% if q %}
       <div style="margin-top:10px; display:flex; gap:10px; flex-wrap:wrap; align-items:center;">

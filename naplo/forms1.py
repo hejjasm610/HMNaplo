@@ -3,24 +3,22 @@ from django import forms
 from datetime import datetime, timedelta
 from .models import NaploSor, Param
 
-# Életkerék – 8 terület (UI)
-ELETKEREK_CHOICES = [
-    ("EMBEREK", "Emberek"),
-    ("ONISMERET", "Önismeret"),
-    ("MUNKA", "Munka"),
-    ("HOBBI", "Hobbi"),
-    ("SPIRIT", "Spirit"),
-    ("PENZUGY", "Pénzügy"),
-    ("TANULAS", "Tanulás"),
-    ("EGESZSEG", "Egészség"),
+# 6P – Dittrich: Változás 6 programja (rövid jelölések a UI-hoz)
+SIX_PROGRAM_CHOICES = [
+    ("P1_TUDAT", "Tudat"),
+    ("P2_ERTEK", "Érték"),
+    ("P3_EGESZSEG", "Egészség"),
+    ("P4_KOZOSSEG", "Közösség"),
+    ("P5_GAZDASAG", "Gazdaság"),
+    ("P6_SPIRIT", "Spirit"),
 ]
 
 
 class NaploSorForm(forms.ModelForm):
     ertek = forms.IntegerField(required=False, initial=6)
-    eletkerek_focus = forms.MultipleChoiceField(
+    six_program_focus = forms.MultipleChoiceField(
         required=False,
-        choices=ELETKEREK_CHOICES,
+        choices=SIX_PROGRAM_CHOICES,
         widget=forms.CheckboxSelectMultiple,
     )
     class Meta:
@@ -28,7 +26,7 @@ class NaploSorForm(forms.ModelForm):
         fields = [
             "datum", "kezdet", "veg",
             "tevekenyseg", "ertek",
-            "kategoria", "eletkerek_focus", "kapcsolodo", "szerep", "erzelem",
+            "kategoria", "six_program_focus", "kapcsolodo", "szerep", "erzelem",
             "kapcsolodo_cel", "megjegyzes",
         ]
         widgets = {
@@ -58,6 +56,10 @@ class NaploSorForm(forms.ModelForm):
                 dt_end += timedelta(days=1)  # éjfél átlépés támogatás
             cleaned["ido"] = dt_end - dt_start
 
+        # 6P fókusz: legfeljebb 2 jelölés (a bevitel gyors maradjon)
+        sixp = cleaned.get("six_program_focus") or []
+        if len(sixp) > 2:
+            self.add_error("six_program_focus", "Legfeljebb 2 jelölést válassz.")
         return cleaned
     
     def __init__(self, *args, **kwargs):

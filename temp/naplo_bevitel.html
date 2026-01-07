@@ -30,51 +30,7 @@
     }
 
 
-    /* Kategória + 6P – egy sorban (FLEX) */
-    .two-inline{
-      grid-column: 1 / -1;
-      display: flex;
-      flex-wrap: nowrap;
-      gap: 12px;
-      align-items: flex-end;
-    }
-    .two-inline > div:first-child{
-      flex: 0 0 25ch;
-      max-width: 19ch;
-    }
-    .two-inline > div:last-child{
-      flex: 1 1 auto;
-      min-width: 0;
-    }
-    /* Életkerék – 2 sorban 4-4 pipa */
-    .eletkerek { margin-top: 0px; }
-    .eletkerek-grid {
-      display: grid;
-      grid-template-columns: repeat(4, minmax(0, 1fr));
-      gap: 8px;
-      align-items: center;
-    }
-    .eletkerek-item {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      padding: 6px 10px;
-      border: 1px solid #ddd;
-      border-radius: 999px;
-      background: #fafafa;
-      font-weight: 800;
-      font-size: 11px;
-      user-select: none;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-    .eletkerek-item input[type="checkbox"]{
-      width: 14px;
-      height: 14px;
-      margin: 0;
-    }
-input, select, textarea {
+    input, select, textarea {
       width: 100%;
       padding: 8px;
       border: 1px solid #ccc;
@@ -128,23 +84,10 @@ input, select, textarea {
       .wrap { grid-template-columns: 1fr; }
       .time-row { grid-template-columns: 1fr 1fr; }
       .grid { grid-template-columns: 120px 1fr; }
-      .two-inline{ flex-wrap: wrap; }
-      .two-inline > div:first-child{ flex: 1 1 100%; max-width: 100%; }
-      .two-inline > div:last-child{ flex: 1 1 100%; }
-      .eletkerek-grid{ grid-template-columns: repeat(2, minmax(0, 1fr)); }
     }
 
     /* Modal (dialog) */
     dialog::backdrop { background: rgba(0,0,0,0.35); }
-  
-    /* hosszú linkek tördelése a megjegyzés view módban */
-    #megjegyzes_view, #megjegyzes_view a {
-      max-width: 100%;
-      overflow-wrap: anywhere;
-      word-break: break-word;
-    }
-    #megjegyzes_view a { display: inline; }
-
   </style>
 </head>
 
@@ -185,21 +128,8 @@ input, select, textarea {
         </div>
 
         <div class="grid">
-          <div class="two-inline">
-            <div>
-              <label for="id_kategoria">Kategória</label>
-              {{ form.kategoria }}
-            </div>
-            <div>
-              <div class="eletkerek">
-                <div class="eletkerek-grid">
-                  {% for cb in form.eletkerek_focus %}
-                    <label class="eletkerek-item">{{ cb.tag }} <span>{{ cb.choice_label }}</span></label>
-                  {% endfor %}
-                </div>
-              </div>
-            </div>
-          </div>
+          <label for="id_kategoria">Kategória</label>
+          {{ form.kategoria }}
 
           <div class="four-inline" style="grid-column: 1 / -1;">
             <div>
@@ -227,33 +157,8 @@ input, select, textarea {
           {{ form.tevekenyseg }}
 
           <label for="id_megjegyzes">Megjegyzés</label>
-          
-          <div id="megjegyzes_view_wrap" style="display:none;">
-            <div id="megjegyzes_view"
-                 style="min-height:48px; padding:8px; border:1px solid #ccc; border-radius:8px; background:#fafafa; cursor:pointer;"
-                 title="Kattints a szerkesztéshez">
-            </div>
-            </div>
-
-          <div id="megjegyzes_edit_wrap">
-            {{ form.megjegyzes }}
-            <div style="display:flex; gap:8px; margin-top:6px;">
-              <button style="display:none" type="button" id="megjegyzes_done"
-                      style="padding:6px 10px; border-radius:10px; border:1px solid #ddd; background:#fff; cursor:pointer;"><style>#megjegyzes_done{display:none !important;}
-    /* hosszú linkek tördelése a megjegyzés view módban */
-    #megjegyzes_view, #megjegyzes_view a {
-      max-width: 100%;
-      overflow-wrap: anywhere;
-      word-break: break-word;
-    }
-    #megjegyzes_view a { display: inline; }
-
-  </style>
-                Kész
-              </button>
-              </div>
-          </div>
-
+          {{ form.megjegyzes }}
+          <div id="megjegyzes_preview" style="margin-top:6px; font-size:12px; color:#666; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;"></div>
         </div>
 
         <div style="display:flex; justify-content:center; margin-top:12px;">
@@ -265,6 +170,7 @@ input, select, textarea {
     </div>
 
     <div class="card">
+      <h3>Utolsó 20 sor</h3>
       <table>
         <thead>
           <tr>
@@ -304,21 +210,32 @@ input, select, textarea {
     </div>
   </dialog>
 
+
+
+
+
+
+
+
+
+
 <script>
+  // ---------- idő számítás ----------
   function parseTime(t) {
     if (!t) return null;
     const parts = t.split(":");
     if (parts.length < 2) return null;
     return {h: parseInt(parts[0],10), m: parseInt(parts[1],10)};
   }
-
   function toMinutes(tm){ return tm.h*60 + tm.m; }
-
   function updateDuration(){
-    const start = parseTime(document.getElementById("id_kezdet").value);
-    const end = parseTime(document.getElementById("id_veg").value);
+    const startEl = document.getElementById("id_kezdet");
+    const endEl = document.getElementById("id_veg");
     const out = document.getElementById("ido_display");
+    if (!startEl || !endEl || !out) return;
 
+    const start = parseTime(startEl.value);
+    const end = parseTime(endEl.value);
     if (!start || !end){ out.value = ""; return; }
 
     let diff = toMinutes(end) - toMinutes(start);
@@ -328,34 +245,14 @@ input, select, textarea {
     out.value = `${h}:${String(m).padStart(2,"0")}`;
   }
 
-  document.getElementById("id_kezdet").addEventListener("input", updateDuration);
-  document.getElementById("id_veg").addEventListener("input", updateDuration);
-  updateDuration();
-
-  const catDlg = document.getElementById("catDialog");
-  const catDlgClose = document.getElementById("catDlgClose");
-  const catEntriesList = document.getElementById("catEntriesList");
-  const catTitle = document.getElementById("catDlgTitle");
-  const catSub = document.getElementById("catDlgSub");
-
-  catDlgClose.addEventListener("click", () => catDlg.close());
-
-  catDlg.addEventListener("click", (e) => {
-    const r = catDlg.getBoundingClientRect();
-    const inside =
-      r.top <= e.clientY && e.clientY <= r.bottom &&
-      r.left <= e.clientX && e.clientX <= r.right;
-    if (!inside) catDlg.close();
-  });
-
+  // ---------- biztonságos HTML + linkesítés ----------
   function escapeHtml(s) {
     return (s || "").replace(/[&<>"']/g, c => ({
-      "&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"
+      "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
     }[c]));
   }
 
   function linkifyEscaped(escaped) {
-    // escaped szövegből kattintható linkek (http(s):// és www.)
     const urlRe = /(https?:\/\/[^\s<]+)|(www\.[^\s<]+)/g;
     return (escaped || "").replace(urlRe, (m) => {
       const href = m.startsWith("www.") ? ("https://" + m) : m;
@@ -363,28 +260,22 @@ input, select, textarea {
     });
   }
 
-</script>
-
-<script>
-  // külön script blokk, hogy a fenti escapeHtml fixen elérhető legyen
-  function escapeHtml2(s) {
-    return (s || "").replace(/[&<>"']/g, c => ({
-      "&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"
-    }[c]));
+  // ---------- megjegyzés "élő" kattintható előnézet ----------
+  function updateMegjegyzesPreview(){
+    const ta = document.getElementById("id_megjegyzes");
+    const box = document.getElementById("megjegyzes_preview");
+    if (!ta || !box) return;
+    const v = ta.value || "";
+    if (!v.trim()) { box.innerHTML = ""; return; }
+    box.innerHTML = linkifyEscaped(escapeHtml(v));
   }
-</script>
 
-<script>
-  // NOTE: A fenti két escapeHtml blokk közül egyik is elég lenne. A te projektedbe illesztéskor hagyd meg az egyiket.
-</script>
-
-<script>
-  // A fenti duplázás oka: itt futtatjuk a végleges, hibátlan verziót.
-  function escapeHtml(s) {
-    return (s || "").replace(/[&<>"']/g, c => ({
-      "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
-    }[c]));
-  }
+  // ---------- kategória modal ----------
+  const catDlg = document.getElementById("catDialog");
+  const catDlgClose = document.getElementById("catDlgClose");
+  const catEntriesList = document.getElementById("catEntriesList");
+  const catTitle = document.getElementById("catDlgTitle");
+  const catSub = document.getElementById("catDlgSub");
 
   function setFieldValue(id, value) {
     const el = document.getElementById(id);
@@ -394,17 +285,7 @@ input, select, textarea {
     el.dispatchEvent(new Event("input", { bubbles: true }));
   }
 
-  function setCheckboxGroupByName(name, selectedValues) {
-  const set = new Set((selectedValues || []).map(String));
-  document.querySelectorAll(`input[name="${name}"]`).forEach((el) => {
-    el.checked = set.has(String(el.value));
-    el.dispatchEvent(new Event("change", { bubbles: true }));
-  });
-  }
-
-
   function fillFromEntry(e) {
-    // Dátum / Kezd / Vég / Idő: változatlan.
     setFieldValue("id_ertek", e.ertek ?? "");
     setFieldValue("id_kapcsolodo", e.kapcsolodo ?? "");
     setFieldValue("id_szerep", e.szerep ?? "");
@@ -412,13 +293,13 @@ input, select, textarea {
     setFieldValue("id_kapcsolodo_cel", e.kapcsolodo_cel ?? "");
     setFieldValue("id_tevekenyseg", e.tevekenyseg ?? "");
     setFieldValue("id_megjegyzes", e.megjegyzes ?? "");
-    setCheckboxGroupByName("eletkerek_focus", e.eletkerek_focus || []);
+    updateMegjegyzesPreview();
   }
 
   async function openCategoryLastEntries(kategoria) {
+    if (!catDlg) return;
     catTitle.textContent = kategoria || "";
     catSub.textContent = "Válassz az utolsó 20 bejegyzésből. Kattintásra kitölti a mezőket.";
-
     catEntriesList.innerHTML = "";
 
     const url = `/naplo/api/utolso-bejegyzesek-kategoriara/?kategoria=${encodeURIComponent(kategoria)}&limit=20`;
@@ -466,83 +347,37 @@ input, select, textarea {
     catDlg.showModal();
   }
 
-  document.getElementById("id_kategoria").addEventListener("change", function () {
-    const v = (this.value || "").trim();
-    if (!v) return;
-    openCategoryLastEntries(v);
-  });
-</script>
-
-
-<script>
-  function escapeHtml(s) {
-    return (s || "").replace(/[&<>"']/g, c => ({
-      "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
-    }[c]));
-  }
-
-  function linkifyEscaped(escaped) {
-    const urlRe = /(https?:\/\/[^\s<]+)|(www\.[^\s<]+)/g;
-    return (escaped || "").replace(urlRe, (m) => {
-      const href = m.startsWith("www.") ? ("https://" + m) : m;
-      return `<a href="${href}" target="_blank" rel="noopener noreferrer">${m}</a>`;
-    });
-  }
-
-  function renderMegjegyzesViewFromTextarea() {
-    const ta = document.getElementById("id_megjegyzes");
-    const view = document.getElementById("megjegyzes_view");
-    if (!ta || !view) return;
-    const v = (ta.value || "").trim();
-    if (!v) {
-      view.innerHTML = '<span style="color:#888;">(nincs megjegyzés)</span>';
-      return;
-    }
-    // View mód: kattintható linkek
-    view.innerHTML = linkifyEscaped(escapeHtml(v)).replace(/\n/g, "<br>");
-  }
-
+  // ---------- init + eventek ----------
   document.addEventListener("DOMContentLoaded", () => {
-    const ta = document.getElementById("id_megjegyzes");
-    const viewWrap = document.getElementById("megjegyzes_view_wrap");
-    const editWrap = document.getElementById("megjegyzes_edit_wrap");
-    const view = document.getElementById("megjegyzes_view");
-    const done = document.getElementById("megjegyzes_done");
+    const startEl = document.getElementById("id_kezdet");
+    const endEl = document.getElementById("id_veg");
+    if (startEl) startEl.addEventListener("input", updateDuration);
+    if (endEl) endEl.addEventListener("input", updateDuration);
+    updateDuration();
 
-    if (!ta || !viewWrap || !editWrap || !view || !done) return;
+    const megj = document.getElementById("id_megjegyzes");
+    if (megj) megj.addEventListener("input", updateMegjegyzesPreview);
+    updateMegjegyzesPreview();
 
-    // Alap: ha van már szöveg, view mód indul; ha üres, edit mód indul.
-    const hasText = (ta.value || "").trim().length > 0;
-    if (hasText) {
-      renderMegjegyzesViewFromTextarea();
-      viewWrap.style.display = "block";
-      editWrap.style.display = "none";
-    } else {
-      viewWrap.style.display = "none";
-      editWrap.style.display = "block";
+    const catSel = document.getElementById("id_kategoria");
+    if (catSel) {
+      catSel.addEventListener("change", function () {
+        const v = (this.value || "").trim();
+        if (!v) return;
+        openCategoryLastEntries(v);
+      });
     }
 
-    // View -> Edit
-    view.addEventListener("click", (e) => {
-      // ha linkre kattint, nyíljon meg, ne váltson edit módra
-      if (e.target && e.target.tagName === "A") return;
-      editWrap.style.display = "block";
-      viewWrap.style.display = "none";
-      ta.focus();
-    });
+    if (catDlgClose) catDlgClose.addEventListener("click", () => catDlg.close());
 
-    // Edit -> View (nem ment, csak visszavált)
-    done.addEventListener("click", () => {
-      const nowHasText = (ta.value || "").trim().length > 0;
-      if (!nowHasText) {
-        viewWrap.style.display = "none";
-        editWrap.style.display = "block";
-        return;
-      }
-      renderMegjegyzesViewFromTextarea();
-      viewWrap.style.display = "block";
-      editWrap.style.display = "none";
-    });
+    if (catDlg) {
+      catDlg.addEventListener("click", (e) => {
+        const r = catDlg.getBoundingClientRect();
+        const inside = r.top <= e.clientY && e.clientY <= r.bottom &&
+                       r.left <= e.clientX && e.clientX <= r.right;
+        if (!inside) catDlg.close();
+      });
+    }
   });
 </script>
 

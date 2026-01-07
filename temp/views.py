@@ -10,19 +10,6 @@ from django.urls import reverse
 from .models import NaploSor
 from .forms import NaploSorForm
 
-# Életkerék – fix sorrend (oldal + API)
-ELETKEREK_ORDER = [
-    ("EMBEREK", "Emberek"),
-    ("ONISMERET", "Önismeret"),
-    ("MUNKA", "Munka"),
-    ("HOBBI", "Hobbi"),
-    ("SPIRIT", "Spirit"),
-    ("PENZUGY", "Pénzügy"),
-    ("TANULAS", "Tanulás"),
-    ("EGESZSEG", "Egészség"),
-]
-
-
 
 def format_minutes(total_minutes: int) -> str:
     """Perc -> 'X nap Y óra Z perc' (0 esetén is ad '0 perc'-et)."""
@@ -115,8 +102,6 @@ def naplo_bevitel(request, pk=None):
 
     utolso_20 = NaploSor.objects.order_by("-id")[:20]
 
-
-
     return render(
         request,
         "naplo/naplo_bevitel.html",
@@ -129,116 +114,6 @@ def naplo_bevitel(request, pk=None):
 
 def kategoria_treemap(request):
     return render(request, "naplo/kategoria_treemap.html")
-
-
-def eletkerek(request):
-    return render(request, "naplo/eletkerek.html")
-
-
-def api_eletkerek_osszefoglalo(request):
-    """
-    GET:
-      - start=YYYY-MM-DD
-      - end=YYYY-MM-DD
-
-    Válasz:
-      {
-        "items":[{"code":"EMBEREK","label":"Emberek","minutes":123,"pct":12.3}, ...],
-        "total_minutes": 1000
-      }
-
-    Szabály:
-      - ha egy sorban több terület van jelölve, az idő egyenlően oszlik meg köztük.
-    """
-    start_s = request.GET.get("start")
-    end_s = request.GET.get("end")
-
-    start_d = parse_date(start_s) if start_s else None
-    end_d = parse_date(end_s) if end_s else None
-
-    if not start_d or not end_d:
-        return JsonResponse({"error": "Kell start és end (YYYY-MM-DD)."}, status=400)
-
-    qs = NaploSor.objects.filter(datum__range=(start_d, end_d)).only("ido", "eletkerek_focus")
-
-    total_minutes = 0
-    per_minutes = {code: 0.0 for code, _ in ELETKEREK_ORDER}
-
-    for s in qs:
-        minutes = int(s.ido.total_seconds() // 60) if s.ido else 0
-        total_minutes += minutes
-
-        tags = list(s.eletkerek_focus or [])
-        if not tags:
-            continue
-
-        share = minutes / len(tags)
-        for t in tags:
-            if t in per_minutes:
-                per_minutes[t] += share
-
-    items = []
-    for code, label in ELETKEREK_ORDER:
-        mins = per_minutes.get(code, 0.0)
-        pct = (mins / total_minutes * 100.0) if total_minutes else 0.0
-        items.append({
-            "code": code,
-            "label": label,
-            "minutes": int(round(mins)),
-            "pct": round(pct, 1),
-        })
-
-    return JsonResponse({"items": items, "total_minutes": total_minutes})
-
-
-def api_eletkerek_bejegyzesek(request):
-    """
-    GET:
-      - start=YYYY-MM-DD
-      - end=YYYY-MM-DD
-      - terulet=ELETKEREK code (pl. EGESZSEG)
-
-    Válasz:
-      {"entries":[{id, edit_url, datum, kezdet, veg, minutes, minutes_human, tevekenyseg, megjegyzes}, ...]}
-    """
-    start_s = request.GET.get("start")
-    end_s = request.GET.get("end")
-    code = (request.GET.get("terulet") or "").strip()
-
-    start_d = parse_date(start_s) if start_s else None
-    end_d = parse_date(end_s) if end_s else None
-
-    if not start_d or not end_d or not code:
-        return JsonResponse({"error": "Kell start, end és terulet."}, status=400)
-
-    base_qs = (
-        NaploSor.objects
-        .filter(datum__range=(start_d, end_d))
-        .order_by("-datum", "-kezdet", "-id")
-    )
-
-    entries = []
-    for s in base_qs.only("id", "datum", "kezdet", "veg", "ido", "tevekenyseg", "megjegyzes", "eletkerek_focus"):
-        tags = list(s.eletkerek_focus or [])
-        if code not in tags:
-            continue
-
-        minutes = int(s.ido.total_seconds() // 60) if s.ido else 0
-        entries.append({
-            "id": s.id,
-            "edit_url": reverse("naplo_bevitel_edit", args=[s.id]),
-            "datum": s.datum.isoformat() if s.datum else "",
-            "kezdet": s.kezdet.strftime("%H:%M") if s.kezdet else "",
-            "veg": s.veg.strftime("%H:%M") if s.veg else "",
-            "minutes": minutes,
-            "minutes_human": format_minutes(minutes),
-            "tevekenyseg": s.tevekenyseg or "",
-            "megjegyzes": s.megjegyzes or "",
-        })
-        if len(entries) >= 500:
-            break
-
-    return JsonResponse({"entries": entries})
 
 
 def api_kategoria_osszefoglalo(request):
@@ -367,7 +242,6 @@ def api_utolso_bejegyzesek_kategoriara(request):
             "kapcsolodo_cel": s.kapcsolodo_cel or "",
             "tevekenyseg": s.tevekenyseg or "",
             "megjegyzes": s.megjegyzes or "",
-            "eletkerek_focus": list(s.eletkerek_focus or []),
         })
 
     return JsonResponse({"entries": entries})

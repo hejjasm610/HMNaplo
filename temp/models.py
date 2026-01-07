@@ -37,9 +37,6 @@ class NaploSor(models.Model):
     erzelem = models.CharField(max_length=100, blank=True)
     kapcsolodo_cel = models.CharField(max_length=200, blank=True)
 
-    # Életkerék fókusz: több címke tárolása JSON listában (pl. ['EGESZSEG','TANULAS'])
-    eletkerek_focus = models.JSONField(default=list, blank=True)
-
     letrehozva = models.DateTimeField(auto_now_add=True)
     megjegyzes = models.TextField(blank=True)
 

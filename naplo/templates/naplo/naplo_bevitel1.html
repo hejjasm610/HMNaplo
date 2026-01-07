@@ -46,30 +46,39 @@
       flex: 1 1 auto;
       min-width: 0;
     }
-    /* Életkerék – 2 sorban 4-4 pipa */
-    .eletkerek { margin-top: 0px; }
-    .eletkerek-grid {
-      display: grid;
-      grid-template-columns: repeat(4, minmax(0, 1fr));
+/* 6P – egy sorban, 6 címkével (1 sor), többféle widget HTML-re robusztusan */
+    .sixp{ margin-top: 0px; display: flex; align-items: center; gap: 8px; flex-wrap: nowrap; overflow: hidden; }
+    .sixp ul{
+      display: flex;
+      flex-wrap: nowrap;
+      gap: 8px;
+      padding: 0;
+      margin: 0;
+      list-style: none;
+      align-items: center;
+    }
+    .sixp li{ margin: 0; list-style: none; }
+    /* ha a Django widget nem UL/LI-t ad, hanem DIV-eket */
+    .sixp > div{
+      display: flex;
+      flex-wrap: nowrap;
       gap: 8px;
       align-items: center;
     }
-    .eletkerek-item {
+    .sixp label{
       display: inline-flex;
       align-items: center;
       gap: 6px;
-      padding: 6px 10px;
+      padding: 4px 8px;
       border: 1px solid #ddd;
       border-radius: 999px;
       background: #fafafa;
-      font-weight: 800;
+      font-weight: 700;
       font-size: 11px;
       user-select: none;
       white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
     }
-    .eletkerek-item input[type="checkbox"]{
+    .sixp input[type="checkbox"]{
       width: 14px;
       height: 14px;
       margin: 0;
@@ -131,7 +140,8 @@ input, select, textarea {
       .two-inline{ flex-wrap: wrap; }
       .two-inline > div:first-child{ flex: 1 1 100%; max-width: 100%; }
       .two-inline > div:last-child{ flex: 1 1 100%; }
-      .eletkerek-grid{ grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .sixp{ flex-wrap: wrap; }
+      .sixp ul, .sixp > div{ flex-wrap: wrap; }
     }
 
     /* Modal (dialog) */
@@ -191,12 +201,8 @@ input, select, textarea {
               {{ form.kategoria }}
             </div>
             <div>
-              <div class="eletkerek">
-                <div class="eletkerek-grid">
-                  {% for cb in form.eletkerek_focus %}
-                    <label class="eletkerek-item">{{ cb.tag }} <span>{{ cb.choice_label }}</span></label>
-                  {% endfor %}
-                </div>
+<div class="sixp">
+                {{ form.six_program_focus }}
               </div>
             </div>
           </div>
@@ -412,7 +418,7 @@ input, select, textarea {
     setFieldValue("id_kapcsolodo_cel", e.kapcsolodo_cel ?? "");
     setFieldValue("id_tevekenyseg", e.tevekenyseg ?? "");
     setFieldValue("id_megjegyzes", e.megjegyzes ?? "");
-    setCheckboxGroupByName("eletkerek_focus", e.eletkerek_focus || []);
+    setCheckboxGroupByName("six_program_focus", e.six_program_focus || []);
   }
 
   async function openCategoryLastEntries(kategoria) {
